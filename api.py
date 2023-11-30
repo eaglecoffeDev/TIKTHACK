@@ -324,3 +324,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log_info("\nScript interrompu.")
         sys.exit(0)
+        
