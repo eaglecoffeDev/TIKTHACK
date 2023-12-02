@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from colorama import Fore, Style
 import re
 from scapy.all import IP, TCP, sr1
+import select
 
 # Configuration des logs
 logging.basicConfig(filename='script_log.txt', level=logging.DEBUG)
@@ -16,7 +17,7 @@ def log_info(message):
 
 def log_error(message):
     logging.error(message)
-    print(f"{Fore.BLUE}[ERROR] {message}{Style.RESET_ALL}")
+    print(f"{Fore.RED}[ERROR] {message}{Style.RESET_ALL}")
 
 def get_ip_from_input(input_str):
     try:
@@ -38,7 +39,7 @@ def get_dynamic_ip(target):
 
 def print_banner():
     banner = f"""
-{Fore.BLUE}
+{Fore.GREEN}
 /$$$$$$$$ /$$$$$$ /$$   /$$ /$$$$$$$$ /$$   /$$  /$$$$$$   /$$$$$$  /$$   /$$
 |__  $$__/|_  $$_/| $$  /$$/|__  $$__/| $$  | $$ /$$__  $$ /$$__  $$| $$  /$$/
    | $$     | $$  | $$ /$$/    | $$   | $$  | $$| $$  \ $$| $$  \__/| $$ /$$/ 
@@ -230,29 +231,70 @@ def bypass_tiktok_api(target, port):
         log_error(f"[-] Erreur lors du contournement TikTok API : {str(e)}")
 
 def display_remote_logs(target, port, log_file_path="remote_logs.txt"):
+
     target_ip = get_dynamic_ip(target)
+
     if target_ip is None:
+
         return False
 
+
     try:
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+
             client_socket.connect((target_ip, port))
+
             log_info("[+] Connexion établie avec l'hôte distant")
 
-            with open(log_file_path, 'w', encoding='utf-8') as log_file:
-                while True:
-                    log_data = client_socket.recv(4096)
-                    if not log_data:
-                        break
-                    decoded_log_data = log_data.decode('utf-8', errors='ignore')
-                    print(decoded_log_data)
-                    log_file.write(decoded_log_data)
 
-            log_info(f"[+] Les journaux distants ont été enregistrés dans : {log_file_path}")
+            inputs = [client_socket, sys.stdin]
+
+            outputs = []
+
+
+            while inputs:
+
+                readable, writable, exceptional = select.select(inputs, outputs, inputs)
+
+
+                for s in readable:
+
+                    if s is client_socket:
+
+                        log_data = s.recv(4096)
+
+                        if not log_data:
+
+                            inputs.remove(s)
+
+                            break
+
+                        decoded_log_data = log_data.decode('utf-8', errors='ignore')
+
+                        print(decoded_log_data, end='')
+
+                        sys.stdout.flush()
+
+                    elif s is sys.stdin:
+
+                        user_input = input()
+
+                        if not user_input:
+
+                            break
+
+                        client_socket.send(user_input.encode())
+
+
             log_info("[+] Connexion fermée")
+
             return True
+
     except Exception as e:
+
         log_error(f"[-] Erreur de connexion à l'hôte distant : {str(e)}")
+
         return False
 
 def fetch_user_data_from_remote(host, port, output_file_path="user_data_output.txt"):
@@ -380,4 +422,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log_info("\nScript interrompu.")
         sys.exit(0)
-
