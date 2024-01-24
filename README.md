@@ -1,6 +1,3 @@
-# TIKTHACK
-Sure, you can provide a comprehensive Readme for your TIKTHACK V2.1 tool to guide users on how to use it effectively. Here's a sample template you can use:
-
 # TIKTHACK V2.1
 
 TIKTHACK is a versatile Python tool designed for various network and security tasks. Version 2.1 comes with added features and improvements over the previous version. This tool leverages a combination of socket programming, Scapy, and other Python libraries to perform tasks like vulnerability creation, exploitation, bypassing security measures, and more.
